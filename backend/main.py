@@ -26,11 +26,10 @@ IGNORE_DIRS = {
 }
 
 # File extensions to ignore
+
 IGNORE_EXTENSIONS = {
-    '.exe', '.dll', '.so', '.dylib', '.pyc', '.pyo', '.class', '.o', '.a',
-    '.lib', '.zip', '.tar', '.gz', '.iso', '.dmg', '.jpg', '.jpeg', '.png',
-    '.gif', '.ico', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.mp3', '.mp4',
-    '.avi', '.mov', '.lock',
+    '.exe', '.dll', '.so', '.dylib', '.pyc', '.pyo', '.class',
+    '.o', '.a', '.lib', '.obj', '.lock',
 }
 
 MAX_FILES = 5000

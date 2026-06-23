@@ -22,13 +22,14 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Function to get file extension
+  // Get file extension
   const getFileExtension = (filename) => {
     return filename.split('.').pop().toLowerCase();
   };
 
-  // Function to get file type
+  // Get file type
   const getFileType = (filename) => {
     const ext = getFileExtension(filename);
     const types = {
@@ -54,7 +55,7 @@ function App() {
     return types[ext] || 'Other';
   };
 
-  // Get unique file types from all files
+  // Get unique file types
   const getUniqueFileTypes = () => {
     const types = new Set();
     allFiles.forEach(file => {
@@ -63,24 +64,34 @@ function App() {
     return Array.from(types).sort();
   };
 
-  // Filter files
-  const filterFiles = (filterType) => {
-    setSelectedFilter(filterType);
+  // Count files by type
+  const getFileCountByType = () => {
+    const counts = {};
+    allFiles.forEach(file => {
+      const type = getFileType(file.label);
+      counts[type] = (counts[type] || 0) + 1;
+    });
+    return counts;
+  };
+
+  // Search files
+  const performSearch = (query, filterType, sortOption) => {
     let filtered = allFiles;
 
-    // Apply filter
+    // Apply filter by type
     if (filterType !== 'all') {
-      filtered = allFiles.filter(file => getFileType(file.label) === filterType);
+      filtered = filtered.filter(file => getFileType(file.label) === filterType);
+    }
+
+    // Apply search
+    if (query.trim() !== '') {
+      filtered = filtered.filter(file =>
+        file.label.toLowerCase().includes(query.toLowerCase())
+      );
     }
 
     // Apply sort
-    applySort(filtered, sortBy);
-  };
-
-  // Apply sort
-  const applySort = (filesToSort, sortOption) => {
-    let sorted = [...filesToSort];
-
+    let sorted = [...filtered];
     if (sortOption === 'name') {
       sorted.sort((a, b) => a.label.localeCompare(b.label));
     } else if (sortOption === 'size-desc') {
@@ -96,17 +107,22 @@ function App() {
     setDisplayFiles(sorted);
   };
 
+  // Handle search input
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
+    performSearch(query, selectedFilter, sortBy);
+  };
+
+  // Handle filter change
+  const handleFilterChange = (filterType) => {
+    setSelectedFilter(filterType);
+    performSearch(searchQuery, filterType, sortBy);
+  };
+
   // Handle sort change
-  const handleSortChange = (newSort) => {
-    setSortBy(newSort);
-    let filtered = allFiles;
-
-    // Apply current filter
-    if (selectedFilter !== 'all') {
-      filtered = allFiles.filter(file => getFileType(file.label) === selectedFilter);
-    }
-
-    applySort(filtered, newSort);
+  const handleSortChange = (sortOption) => {
+    setSortBy(sortOption);
+    performSearch(searchQuery, selectedFilter, sortOption);
   };
 
   // Scan repository
@@ -118,15 +134,12 @@ function App() {
     setSelectedFile(null);
     setSelectedFilter('all');
     setSortBy('name');
+    setSearchQuery('');
 
     try {
-      console.log('Scanning:', repoPath);
-      
       const response = await axios.post(
         `${API_BASE}/api/scan?repo_path=${repoPath}`
       );
-
-      console.log('Response:', response.data);
 
       if (!response.data || !response.data.nodes) {
         setError('Invalid response from server');
@@ -143,13 +156,10 @@ function App() {
 
     } catch (err) {
       console.error('Error:', err);
-      
       if (err.code === 'ERR_NETWORK') {
         setError('Cannot connect to backend. Make sure backend is running: python main.py');
       } else if (err.response?.status === 404) {
         setError('Path not found. Check your directory path.');
-      } else if (err.response?.data?.detail) {
-        setError(err.response.data.detail);
       } else {
         setError('Error: ' + (err.message || 'Unknown error'));
       }
@@ -166,6 +176,7 @@ function App() {
   };
 
   const fileTypes = getUniqueFileTypes();
+  
   const stats = {
     total: allFiles.length,
     totalSize: (allFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(2),
@@ -177,7 +188,7 @@ function App() {
       {/* Header */}
       <div style={styles.header}>
         <h1>Repository Explorer</h1>
-        <p>View and filter your codebase files</p>
+        <p>View and find your files</p>
       </div>
 
       {/* Search Box */}
@@ -213,111 +224,133 @@ function App() {
         </div>
       )}
 
-      {/* Stats and Filters */}
+      {/* Stats */}
       {allFiles.length > 0 && (
-        <div>
-          {/* Stats */}
-          <div style={styles.statsBox}>
-            <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Files:</span>
-              <span style={styles.statValue}>{stats.total}</span>
-            </div>
-            <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Size:</span>
-              <span style={styles.statValue}>{stats.totalSize} KB</span>
-            </div>
-            <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Lines:</span>
-              <span style={styles.statValue}>{stats.totalLines}</span>
-            </div>
+        <div style={styles.statsBox}>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Total Files:</span>
+            <span style={styles.statValue}>{stats.total}</span>
           </div>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Total Size:</span>
+            <span style={styles.statValue}>{stats.totalSize} KB</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Total Lines:</span>
+            <span style={styles.statValue}>{stats.totalLines}</span>
+          </div>
+        </div>
+      )}
 
-          {/* Filter Buttons */}
-          <div style={styles.filterSection}>
-            <h3>Filter by File Type:</h3>
-            <div style={styles.filterButtons}>
+      
+
+      {/* Filter Buttons */}
+      {allFiles.length > 0 && (
+        <div style={styles.filterSection}>
+          <h3>Filter by Type:</h3>
+          <div style={styles.filterButtons}>
+            <button
+              onClick={() => handleFilterChange('all')}
+              style={{
+                ...styles.filterButton,
+                backgroundColor: selectedFilter === 'all' ? '#2196F3' : '#e0e0e0',
+                color: selectedFilter === 'all' ? 'white' : 'black',
+              }}
+            >
+              All
+            </button>
+            {fileTypes.map(type => (
               <button
-                onClick={() => filterFiles('all')}
+                key={type}
+                onClick={() => handleFilterChange(type)}
                 style={{
                   ...styles.filterButton,
-                  backgroundColor: selectedFilter === 'all' ? '#2196F3' : '#e0e0e0',
-                  color: selectedFilter === 'all' ? 'white' : 'black',
+                  backgroundColor: selectedFilter === type ? '#2196F3' : '#e0e0e0',
+                  color: selectedFilter === type ? 'white' : 'black',
                 }}
               >
-                All Types
+                {type}
               </button>
-              {fileTypes.map(type => (
-                <button
-                  key={type}
-                  onClick={() => filterFiles(type)}
-                  style={{
-                    ...styles.filterButton,
-                    backgroundColor: selectedFilter === type ? '#2196F3' : '#e0e0e0',
-                    color: selectedFilter === type ? 'white' : 'black',
-                  }}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
+            ))}
           </div>
+        </div>
+      )}
 
-          {/* Sort Options */}
-          <div style={styles.sortSection}>
-            <h3>Sort by:</h3>
-            <div style={styles.sortButtons}>
-              <button
-                onClick={() => handleSortChange('name')}
-                style={{
-                  ...styles.sortButton,
-                  backgroundColor: sortBy === 'name' ? '#4CAF50' : '#e0e0e0',
-                  color: sortBy === 'name' ? 'white' : 'black',
-                }}
-              >
-                Name
-              </button>
-              <button
-                onClick={() => handleSortChange('size-desc')}
-                style={{
-                  ...styles.sortButton,
-                  backgroundColor: sortBy === 'size-desc' ? '#4CAF50' : '#e0e0e0',
-                  color: sortBy === 'size-desc' ? 'white' : 'black',
-                }}
-              >
-                Size (Large to Small)
-              </button>
-              <button
-                onClick={() => handleSortChange('size-asc')}
-                style={{
-                  ...styles.sortButton,
-                  backgroundColor: sortBy === 'size-asc' ? '#4CAF50' : '#e0e0e0',
-                  color: sortBy === 'size-asc' ? 'white' : 'black',
-                }}
-              >
-                Size (Small to Large)
-              </button>
-              <button
-                onClick={() => handleSortChange('lines-desc')}
-                style={{
-                  ...styles.sortButton,
-                  backgroundColor: sortBy === 'lines-desc' ? '#4CAF50' : '#e0e0e0',
-                  color: sortBy === 'lines-desc' ? 'white' : 'black',
-                }}
-              >
-                Lines (High to Low)
-              </button>
-              <button
-                onClick={() => handleSortChange('lines-asc')}
-                style={{
-                  ...styles.sortButton,
-                  backgroundColor: sortBy === 'lines-asc' ? '#4CAF50' : '#e0e0e0',
-                  color: sortBy === 'lines-asc' ? 'white' : 'black',
-                }}
-              >
-                Lines (Low to High)
-              </button>
-            </div>
+      {/* Sort Options */}
+      {allFiles.length > 0 && (
+        <div style={styles.sortSection}>
+          <h3>Sort by:</h3>
+          <div style={styles.sortButtons}>
+            <button
+              onClick={() => handleSortChange('name')}
+              style={{
+                ...styles.sortButton,
+                backgroundColor: sortBy === 'name' ? '#4CAF50' : '#e0e0e0',
+                color: sortBy === 'name' ? 'white' : 'black',
+              }}
+            >
+              Name
+            </button>
+            <button
+              onClick={() => handleSortChange('size-desc')}
+              style={{
+                ...styles.sortButton,
+                backgroundColor: sortBy === 'size-desc' ? '#4CAF50' : '#e0e0e0',
+                color: sortBy === 'size-desc' ? 'white' : 'black',
+              }}
+            >
+              Size (Large)
+            </button>
+            <button
+              onClick={() => handleSortChange('size-asc')}
+              style={{
+                ...styles.sortButton,
+                backgroundColor: sortBy === 'size-asc' ? '#4CAF50' : '#e0e0e0',
+                color: sortBy === 'size-asc' ? 'white' : 'black',
+              }}
+            >
+              Size (Small)
+            </button>
+            <button
+              onClick={() => handleSortChange('lines-desc')}
+              style={{
+                ...styles.sortButton,
+                backgroundColor: sortBy === 'lines-desc' ? '#4CAF50' : '#e0e0e0',
+                color: sortBy === 'lines-desc' ? 'white' : 'black',
+              }}
+            >
+              Lines (High)
+            </button>
+            <button
+              onClick={() => handleSortChange('lines-asc')}
+              style={{
+                ...styles.sortButton,
+                backgroundColor: sortBy === 'lines-asc' ? '#4CAF50' : '#e0e0e0',
+                color: sortBy === 'lines-asc' ? 'white' : 'black',
+              }}
+            >
+              Lines (Low)
+            </button>
           </div>
+        </div>
+      )}
+
+      {/* Search Files */}
+      {allFiles.length > 0 && (
+        <div style={styles.searchFilesSection}>
+          <h3>Search Files:</h3>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Type filename to search... (e.g., main, app, config)"
+            style={styles.searchInput}
+          />
+          {searchQuery && (
+            <p style={styles.searchResults}>
+              Found {displayFiles.length} file(s) matching "{searchQuery}"
+            </p>
+          )}
         </div>
       )}
 
@@ -349,22 +382,23 @@ function App() {
           {/* File Details */}
           {selectedFile && (
             <FileDetails file={selectedFile} />
-            
           )}
+        </div>
+      )}
+
+      {/* No results */}
+      {allFiles.length > 0 && displayFiles.length === 0 && (
+        <div style={styles.noResultsBox}>
+          <p>No files found matching your search.</p>
+          <p>Try different search terms or remove filters.</p>
         </div>
       )}
 
       {/* Empty State */}
       {!loading && allFiles.length === 0 && !error && (
         <div style={styles.emptyBox}>
-          <h2>Ready to explore your code</h2>
+          <h2>Get ready to explore your inventory</h2>
           <p>Enter a folder path and click "Search"</p>
-          <p>Examples:</p>
-          <ul>
-            <li>. (current folder)</li>
-            <li>D:\repo-visualizer</li>
-            <li>C:\Users\YourName\Downloads</li>
-          </ul>
         </div>
       )}
     </div>
@@ -463,6 +497,8 @@ const styles = {
     color: '#2196F3',
   },
 
+  
+
   filterSection: {
     padding: '20px',
     backgroundColor: 'white',
@@ -475,6 +511,7 @@ const styles = {
     display: 'flex',
     gap: '10px',
     flexWrap: 'wrap',
+    marginTop: '10px',
   },
 
   filterButton: {
@@ -499,6 +536,7 @@ const styles = {
     display: 'flex',
     gap: '10px',
     flexWrap: 'wrap',
+    marginTop: '10px',
   },
 
   sortButton: {
@@ -509,6 +547,30 @@ const styles = {
     fontSize: '12px',
     fontWeight: 'bold',
     transition: 'all 0.2s',
+  },
+
+  searchFilesSection: {
+    padding: '20px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+
+  searchInput: {
+    width: '100%',
+    padding: '12px',
+    fontSize: '14px',
+    border: '2px solid #ddd',
+    borderRadius: '6px',
+    marginTop: '10px',
+    boxSizing: 'border-box',
+  },
+
+  searchResults: {
+    marginTop: '10px',
+    color: '#666',
+    fontSize: '13px',
   },
 
   filesContainer: {
@@ -541,22 +603,6 @@ const styles = {
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
 
-  emptyBox: {
-    textAlign: 'center',
-    padding: '40px',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    marginTop: '20px',
-  },
-  detailsBox: {
-    padding: '20px',
-    backgroundColor: 'white',
-    border: '2px solid #2196F3',
-    borderRadius: '8px',
-    marginTop: '20px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-
   fullPath: {
     marginTop: '10px',
     color: '#666',
@@ -564,8 +610,23 @@ const styles = {
     fontSize: '13px',
     wordBreak: 'break-all',
     margin: '10px 0 0 0',
-  }
-  
+  },
+
+  noResultsBox: {
+    padding: '40px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    textAlign: 'center',
+    marginTop: '20px',
+  },
+
+  emptyBox: {
+    textAlign: 'center',
+    padding: '40px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    marginTop: '20px',
+  },
 };
 
 export default App;
