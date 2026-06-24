@@ -29,7 +29,11 @@ function Visualization({ tree, onNodeClick }) {
       const x = level * 300;
       const y = index * 150;
 
+      // Check if it's a folder - MUST match backend
       const isFolder = node.type === 'folder';
+      
+      console.log(`Node: ${node.name}, Type: ${node.type}, IsFolder: ${isFolder}`);
+
       const nodeObj = {
         id: nodeId,
         data: {
@@ -41,7 +45,7 @@ function Visualization({ tree, onNodeClick }) {
               <div style={{ fontWeight: 'bold', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {node.name}
               </div>
-              {!isFolder && (
+              {!isFolder && node.fileType && (
                 <div style={{ fontSize: '9px', opacity: 0.7 }}>
                   {node.fileType}
                 </div>
@@ -52,7 +56,7 @@ function Visualization({ tree, onNodeClick }) {
         },
         position: { x, y },
         style: {
-          background: isFolder ? '#FF9800' : getColorByType(node.fileType),
+          background: isFolder ? '#FF9800' : getColorByType(node.fileType || 'Other'),
           color: 'white',
           border: '2px solid #333',
           borderRadius: '8px',
@@ -83,6 +87,9 @@ function Visualization({ tree, onNodeClick }) {
     }
 
     traverse(tree);
+    console.log('Total nodes:', nodesList.length);
+    console.log('Nodes:', nodesList);
+    
     setNodes(nodesList);
     setEdges(edgesList);
   }, [tree, setNodes, setEdges]);
@@ -126,6 +133,7 @@ function getColorByType(type) {
     'Audio': '#ff9800',
     'PDF': '#f44336',
     'Archive': '#9c27b0',
+    'Other': '#757575',
   };
   return colors[type] || '#757575';
 }

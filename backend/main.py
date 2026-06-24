@@ -29,8 +29,7 @@ IGNORE_EXTENSIONS = {
     '.o', '.a', '.lib', '.obj', '.lock',
 }
 
-MAX_DEPTH = 8
-MAX_FILES = 500
+MAX_DEPTH = 10
 
 def should_ignore_dir(dirname):
     return dirname in IGNORE_DIRS
@@ -58,13 +57,20 @@ def get_file_type(filename):
     }
     return types.get(ext, 'Other')
 
-def build_tree(path: str, parent_id: str = "", depth: int = 0, file_count: list = None):
-    """Build hierarchical folder and file structure"""
+class IDGenerator:
+    def __init__(self):
+        self.counter = 0
     
-    if file_count is None:
-        file_count = [0]
+    def get_id(self):
+        self.counter += 1
+        return str(self.counter - 1)
+
+id_gen = IDGenerator()
+
+def build_tree(path: str, depth: int = 0):
+    """Build proper hierarchical folder and file structure"""
     
-    if depth >= MAX_DEPTH or file_count[0] >= MAX_FILES:
+    if depth >= MAX_DEPTH:
         return None
     
     path_obj = Path(path)
@@ -77,21 +83,18 @@ def build_tree(path: str, parent_id: str = "", depth: int = 0, file_count: list 
     except PermissionError:
         return None
     
+    # Get ID for this folder FIRST
+    folder_id = id_gen.get_id()
     children = []
-    file_count_in_folder = 0
     
+    # Process children
     for item in items:
-        if file_count[0] >= MAX_FILES:
-            break
-        
         if item.name.startswith('.'):
             continue
         
-        item_id = str(file_count[0])
-        
         if item.is_dir():
             if not should_ignore_dir(item.name):
-                subfolder = build_tree(str(item), item_id, depth + 1, file_count)
+                subfolder = build_tree(str(item), depth + 1)
                 if subfolder:
                     children.append(subfolder)
         else:
@@ -109,7 +112,7 @@ def build_tree(path: str, parent_id: str = "", depth: int = 0, file_count: list 
                         pass
                     
                     file_node = {
-                        "id": item_id,
+                        "id": id_gen.get_id(),
                         "name": item.name,
                         "type": "file",
                         "fileType": get_file_type(item.name),
@@ -118,24 +121,25 @@ def build_tree(path: str, parent_id: str = "", depth: int = 0, file_count: list 
                         "path": str(item),
                     }
                     children.append(file_node)
-                    file_count[0] += 1
-                    file_count_in_folder += 1
                 except:
                     pass
     
-    node = {
-        "id": parent_id if parent_id else "root",
+    # Create folder node with correct ID
+    folder_node = {
+        "id": folder_id,
         "name": path_obj.name or "Root",
         "type": "folder",
         "path": str(path_obj),
-        "fileCount": file_count_in_folder,
         "children": children,
     }
     
-    return node
+    return folder_node
 
 def scan_directory(path: str):
-    """Scan directory and return hierarchical structure"""
+    """Scan directory and return proper hierarchical structure"""
+    global id_gen
+    id_gen = IDGenerator()  # Reset counter for each scan
+    
     path_obj = Path(path)
     
     if not path_obj.exists():
