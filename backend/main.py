@@ -16,24 +16,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Folders to ignore
 IGNORE_DIRS = {
     '.git', 'node_modules', '__pycache__', '.venv', 'venv', 'env', '.env',
     '.next', 'dist', 'build', '.idea', '.vscode', '.pytest_cache', 'egg-info',
     '.egg-info', 'site-packages', '.cache', 'target', 'out', 'bin', 'obj',
-    'Debug', 'Release', '.gradle', '.m2', 'node_modules_backup', '.DS_Store',
-    '.sass-cache', 'bower_components', 'vendor', 'coverage', 'htmlcov', '.tox',
+    'Debug', 'Release', '.gradle', '.m2', '.DS_Store', '.sass-cache',
+    'bower_components', 'vendor', 'coverage', 'htmlcov', '.tox',
 }
-
-# File extensions to ignore
 
 IGNORE_EXTENSIONS = {
     '.exe', '.dll', '.so', '.dylib', '.pyc', '.pyo', '.class',
     '.o', '.a', '.lib', '.obj', '.lock',
 }
 
-MAX_FILES = 5000
-MAX_SCAN_DEPTH = 10
+MAX_DEPTH = 8
+MAX_FILES = 500
 
 def should_ignore_dir(dirname):
     return dirname in IGNORE_DIRS
@@ -42,131 +39,129 @@ def should_ignore_file(filename):
     if filename.startswith('.'):
         return True
     ext = Path(filename).suffix.lower()
-    if ext in IGNORE_EXTENSIONS:
-        return True
-    return False
+    return ext in IGNORE_EXTENSIONS
 
 def get_file_type(filename):
     ext = Path(filename).suffix.lower()
     types = {
-        '.py': 'Python',
-        '.js': 'JavaScript',
-        '.jsx': 'JavaScript',
-        '.ts': 'TypeScript',
-        '.tsx': 'TypeScript',
-        '.java': 'Java',
-        '.cpp': 'C++',
-        '.c': 'C',
-        '.h': 'C Header',
-        '.html': 'HTML',
-        '.css': 'CSS',
-        '.scss': 'SCSS',
-        '.json': 'JSON',
-        '.xml': 'XML',
-        '.yaml': 'YAML',
-        '.yml': 'YAML',
-        '.md': 'Markdown',
-        '.txt': 'Text',
-        '.sql': 'SQL',
-        '.rb': 'Ruby',
-        '.go': 'Go',
-        '.rs': 'Rust',
-        '.php': 'PHP',
-        '.sh': 'Shell',
-        '.bat': 'Batch',
+        'py': 'Python', 'js': 'JavaScript', 'jsx': 'JavaScript', 'ts': 'TypeScript',
+        'tsx': 'TypeScript', 'java': 'Java', 'cpp': 'C++', 'c': 'C', 'h': 'C Header',
+        'html': 'HTML', 'css': 'CSS', 'scss': 'SCSS', 'json': 'JSON', 'xml': 'XML',
+        'yaml': 'YAML', 'yml': 'YAML', 'sql': 'SQL', 'rb': 'Ruby', 'go': 'Go',
+        'rs': 'Rust', 'php': 'PHP', 'sh': 'Shell', 'bat': 'Batch',
+        'md': 'Markdown', 'txt': 'Text', 'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word',
+        'xls': 'Excel', 'xlsx': 'Excel', 'mp4': 'Video', 'avi': 'Video', 'mov': 'Video',
+        'mkv': 'Video', 'mp3': 'Audio', 'wav': 'Audio', 'flac': 'Audio',
+        'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 'svg': 'Image',
+        'ico': 'Image', 'zip': 'Archive', 'rar': 'Archive', '7z': 'Archive',
+        'tar': 'Archive', 'gz': 'Archive',
     }
     return types.get(ext, 'Other')
 
-def scan_directory(path: str):
-    """Scan directory and return file list"""
+def build_tree(path: str, parent_id: str = "", depth: int = 0, file_count: list = None):
+    """Build hierarchical folder and file structure"""
+    
+    if file_count is None:
+        file_count = [0]
+    
+    if depth >= MAX_DEPTH or file_count[0] >= MAX_FILES:
+        return None
+    
     path_obj = Path(path)
     
-    if not path_obj.exists():
-        return {"error": "Path does not exist", "nodes": [], "edges": []}
-    
-    if not path_obj.is_dir():
-        return {"error": "Path is not a directory", "nodes": [], "edges": []}
-    
-    nodes = []
-    node_id = 0
-    scanned_files = 0
+    if not path_obj.exists() or not path_obj.is_dir():
+        return None
     
     try:
-        for root, dirs, files in os.walk(path_obj):
-            depth = len(Path(root).relative_to(path_obj).parts)
-            if depth > MAX_SCAN_DEPTH:
-                continue
-            
-            dirs[:] = [d for d in dirs if not should_ignore_dir(d)]
-            
-            if scanned_files >= MAX_FILES:
-                break
-            
-            for file in files:
-                if scanned_files >= MAX_FILES:
-                    break
-                
-                if should_ignore_file(file):
-                    continue
-                
-                file_path = Path(root) / file
-                
+        items = sorted(path_obj.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+    except PermissionError:
+        return None
+    
+    children = []
+    file_count_in_folder = 0
+    
+    for item in items:
+        if file_count[0] >= MAX_FILES:
+            break
+        
+        if item.name.startswith('.'):
+            continue
+        
+        item_id = str(file_count[0])
+        
+        if item.is_dir():
+            if not should_ignore_dir(item.name):
+                subfolder = build_tree(str(item), item_id, depth + 1, file_count)
+                if subfolder:
+                    children.append(subfolder)
+        else:
+            if not should_ignore_file(item.name):
                 try:
-                    stat = file_path.stat()
-                    file_size = stat.st_size
-                    
+                    file_size = item.stat().st_size
                     if file_size > 50 * 1024 * 1024:
                         continue
                     
                     lines = 0
                     try:
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        with open(item, 'r', encoding='utf-8', errors='ignore') as f:
                             lines = len(f.readlines())
                     except:
                         pass
                     
-                    relative_path = file_path.relative_to(path_obj)
-                    
-                    node = {
-                        "id": str(node_id),
-                        "label": file,
-                        "path": str(relative_path).replace('\\', '/'),
-                        "size": file_size,
+                    file_node = {
+                        "id": item_id,
+                        "name": item.name,
+                        "type": "file",
+                        "fileType": get_file_type(item.name),
                         "lines": lines,
-                        "type": get_file_type(file),
-                        "full_path": str(file_path)
+                        "size": file_size,
+                        "path": str(item),
                     }
-                    
-                    nodes.append(node)
-                    node_id += 1
-                    scanned_files += 1
-                    
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
-                    continue
+                    children.append(file_node)
+                    file_count[0] += 1
+                    file_count_in_folder += 1
+                except:
+                    pass
     
-    except Exception as e:
-        return {"error": f"Error scanning directory: {str(e)}", "nodes": [], "edges": []}
-    
-    return {
-        "nodes": nodes,
-        "edges": [],
-        "total_files": len(nodes),
-        "scanned_files": scanned_files,
-        "max_reached": scanned_files >= MAX_FILES
+    node = {
+        "id": parent_id if parent_id else "root",
+        "name": path_obj.name or "Root",
+        "type": "folder",
+        "path": str(path_obj),
+        "fileCount": file_count_in_folder,
+        "children": children,
     }
+    
+    return node
+
+def scan_directory(path: str):
+    """Scan directory and return hierarchical structure"""
+    path_obj = Path(path)
+    
+    if not path_obj.exists():
+        return {"error": "Path does not exist", "tree": None}
+    
+    if not path_obj.is_dir():
+        return {"error": "Path is not a directory", "tree": None}
+    
+    try:
+        tree = build_tree(path)
+        return {
+            "tree": tree,
+            "root": str(path_obj),
+            "error": None
+        }
+    except Exception as e:
+        return {"error": str(e), "tree": None}
 
 @app.post("/api/scan")
 async def scan_repo(repo_path: str = "."):
-    """Scan a repository"""
     result = scan_directory(repo_path)
     return result
 
-
-
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "message": "Backend is running"}
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn

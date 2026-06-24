@@ -10,75 +10,91 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-const nodeTypes = {};
-
-function Visualization({ files, onNodeClick }) {
+function Visualization({ tree, onNodeClick }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Create nodes from files
   React.useEffect(() => {
-    if (!files || files.length === 0) {
+    if (!tree) {
       setNodes([]);
       setEdges([]);
       return;
     }
 
-    // Create nodes in a circular layout
-    const nodesList = files.map((file, index) => {
-      const angle = (index / files.length) * 2 * Math.PI;
-      const radius = Math.min(500, files.length * 20);
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
+    const nodesList = [];
+    const edgesList = [];
 
-      return {
-        id: file.id,
+    function traverse(node, level = 0, index = 0) {
+      const nodeId = node.id;
+      const x = level * 300;
+      const y = index * 150;
+
+      const isFolder = node.type === 'folder';
+      const nodeObj = {
+        id: nodeId,
         data: {
           label: (
-            <div style={{ textAlign: 'center', fontSize: '12px' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                {file.label.substring(0, 15)}
+            <div style={{ textAlign: 'center', fontSize: '11px' }}>
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>
+                {isFolder ? '📁' : '📄'}
               </div>
-              <div style={{ fontSize: '10px', opacity: 0.8 }}>
-                {file.type}
+              <div style={{ fontWeight: 'bold', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {node.name}
               </div>
-              <div style={{ fontSize: '9px', opacity: 0.6, marginTop: '2px' }}>
-                {file.lines} LOC
-              </div>
+              {!isFolder && (
+                <div style={{ fontSize: '9px', opacity: 0.7 }}>
+                  {node.fileType}
+                </div>
+              )}
             </div>
           ),
+          path: node.path,
         },
         position: { x, y },
         style: {
-          background: getColorByType(file.type),
+          background: isFolder ? '#FF9800' : getColorByType(node.fileType),
           color: 'white',
           border: '2px solid #333',
           borderRadius: '8px',
           padding: '10px',
-          minWidth: '80px',
-          minHeight: '70px',
+          minWidth: '120px',
+          minHeight: '100px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          fontSize: '12px',
+          fontWeight: 'bold',
         },
       };
-    });
+      
+      nodesList.push(nodeObj);
 
+      if (node.children && node.children.length > 0) {
+        node.children.forEach((child, idx) => {
+          traverse(child, level + 1, idx);
+          edgesList.push({
+            id: `${nodeId}-${child.id}`,
+            source: nodeId,
+            target: child.id,
+            animated: false,
+          });
+        });
+      }
+    }
+
+    traverse(tree);
     setNodes(nodesList);
-    setEdges([]);
-  }, [files, setNodes, setEdges]);
+    setEdges(edgesList);
+  }, [tree, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((event, node) => {
-    const file = files.find(f => f.id === node.id);
-    if (file && onNodeClick) {
-      onNodeClick(file);
+    if (onNodeClick) {
+      onNodeClick(node);
     }
-  }, [files, onNodeClick]);
+  }, [onNodeClick]);
 
   return (
-    <div style={{ width: '100%', height: '600px', border: '2px solid #ddd', borderRadius: '8px' }}>
+    <div style={{ width: '100%', height: '700px', border: '2px solid #ddd', borderRadius: '8px' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -95,7 +111,6 @@ function Visualization({ files, onNodeClick }) {
   );
 }
 
-// Color by file type
 function getColorByType(type) {
   const colors = {
     'Python': '#3776ab',

@@ -16,73 +16,36 @@ function FileDetails({ file }) {
 
 function App() {
   const [repoPath, setRepoPath] = useState('.');
+  const [tree, setTree] = useState(null);
   const [allFiles, setAllFiles] = useState([]);
   const [displayFiles, setDisplayFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('explorer'); // 'explorer' or 'visualization'
+  const [viewMode, setViewMode] = useState('visualization');
 
-  // Get file type
   const getFileType = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
     const types = {
-      'py': 'Python',
-      'js': 'JavaScript',
-      'jsx': 'JavaScript',
-      'ts': 'TypeScript',
-      'tsx': 'TypeScript',
-      'java': 'Java',
-      'cpp': 'C++',
-      'c': 'C',
-      'h': 'C Header',
-      'html': 'HTML',
-      'css': 'CSS',
-      'scss': 'SCSS',
-      'json': 'JSON',
-      'xml': 'XML',
-      'yaml': 'YAML',
-      'yml': 'YAML',
-      'sql': 'SQL',
-      'rb': 'Ruby',
-      'go': 'Go',
-      'rs': 'Rust',
-      'php': 'PHP',
-      'sh': 'Shell',
-      'bat': 'Batch',
-      'md': 'Markdown',
-      'txt': 'Text',
-      'pdf': 'PDF',
-      'doc': 'Word',
-      'docx': 'Word',
-      'xls': 'Excel',
-      'xlsx': 'Excel',
-      'mp4': 'Video',
-      'avi': 'Video',
-      'mov': 'Video',
-      'mkv': 'Video',
-      'mp3': 'Audio',
-      'wav': 'Audio',
-      'flac': 'Audio',
-      'jpg': 'Image',
-      'jpeg': 'Image',
-      'png': 'Image',
-      'gif': 'Image',
-      'svg': 'Image',
-      'ico': 'Image',
-      'zip': 'Archive',
-      'rar': 'Archive',
-      '7z': 'Archive',
-      'tar': 'Archive',
-      'gz': 'Archive',
+      'py': 'Python', 'js': 'JavaScript', 'jsx': 'JavaScript', 'ts': 'TypeScript',
+      'tsx': 'TypeScript', 'java': 'Java', 'cpp': 'C++', 'c': 'C', 'h': 'C Header',
+      'html': 'HTML', 'css': 'CSS', 'scss': 'SCSS', 'json': 'JSON', 'xml': 'XML',
+      'yaml': 'YAML', 'yml': 'YAML', 'sql': 'SQL', 'rb': 'Ruby', 'go': 'Go',
+      'rs': 'Rust', 'php': 'PHP', 'sh': 'Shell', 'bat': 'Batch',
+      'md': 'Markdown', 'txt': 'Text', 'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word',
+      'xls': 'Excel', 'xlsx': 'Excel', 'mp4': 'Video', 'avi': 'Video', 'mov': 'Video',
+      'mkv': 'Video', 'mp3': 'Audio', 'wav': 'Audio', 'flac': 'Audio',
+      'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 'svg': 'Image',
+      'ico': 'Image', 'zip': 'Archive', 'rar': 'Archive', '7z': 'Archive',
+      'tar': 'Archive', 'gz': 'Archive',
     };
     return types[ext] || 'Other';
   };
 
-  // Get unique file types
   const getUniqueFileTypes = () => {
     const types = new Set();
     allFiles.forEach(file => {
@@ -91,7 +54,6 @@ function App() {
     return Array.from(types).sort();
   };
 
-  // Perform search with all filters
   const performSearch = (query, filterType, sortOption) => {
     let filtered = allFiles;
 
@@ -136,13 +98,31 @@ function App() {
     performSearch(searchQuery, selectedFilter, sortOption);
   };
 
-  // Scan repository
+  const extractFilesFromTree = (node, files = []) => {
+    if (node.type === 'file') {
+      files.push({
+        id: node.id,
+        label: node.name,
+        type: node.fileType,
+        path: node.path,
+        lines: node.lines,
+        size: node.size,
+        full_path: node.path,
+      });
+    } else if (node.children) {
+      node.children.forEach(child => extractFilesFromTree(child, files));
+    }
+    return files;
+  };
+
   const scanRepo = async () => {
     setLoading(true);
     setError('');
+    setTree(null);
     setAllFiles([]);
     setDisplayFiles([]);
     setSelectedFile(null);
+    setSelectedNode(null);
     setSelectedFilter('all');
     setSortBy('name');
     setSearchQuery('');
@@ -152,18 +132,22 @@ function App() {
         `${API_BASE}/api/scan?repo_path=${repoPath}`
       );
 
-      if (!response.data || !response.data.nodes) {
-        setError('Invalid response from server');
+      if (response.data.error) {
+        setError(response.data.error);
         return;
       }
 
-      if (response.data.nodes.length === 0) {
-        setError('No files found in this directory');
+      if (!response.data.tree) {
+        setError('No folders found');
         return;
       }
 
-      setAllFiles(response.data.nodes);
-      setDisplayFiles(response.data.nodes.sort((a, b) => a.label.localeCompare(b.label)));
+      setTree(response.data.tree);
+
+      // Extract all files from tree for explorer view
+      const files = extractFilesFromTree(response.data.tree);
+      setAllFiles(files);
+      setDisplayFiles(files.sort((a, b) => a.label.localeCompare(b.label)));
 
     } catch (err) {
       console.error('Error:', err);
@@ -192,13 +176,11 @@ function App() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
         <h1>Repository Explorer</h1>
-        <p>Visualize and analyze your codebase</p>
+        <p>View and analyze your codebase</p>
       </div>
 
-      {/* Search Box */}
       <div style={styles.searchBox}>
         <input
           type="text"
@@ -213,33 +195,20 @@ function App() {
           disabled={loading}
           style={styles.button}
         >
-          {loading ? 'Scanning...' : 'Search'}
+          {loading ? 'Scanning...' : 'Scan'}
         </button>
       </div>
 
-      {/* Error */}
       {error && <div style={styles.errorBox}>{error}</div>}
 
-      {/* Success */}
-      {allFiles.length > 0 && (
+      {tree && (
         <div style={styles.successBox}>
-          Found {allFiles.length} files
+          Repository structure loaded ({allFiles.length} files)
         </div>
       )}
 
-      {/* View Mode Toggle */}
-      {allFiles.length > 0 && (
+      {tree && (
         <div style={styles.viewToggle}>
-          <button
-            onClick={() => setViewMode('explorer')}
-            style={{
-              ...styles.toggleButton,
-              backgroundColor: viewMode === 'explorer' ? '#2196F3' : '#e0e0e0',
-              color: viewMode === 'explorer' ? 'white' : 'black',
-            }}
-          >
-            Explorer View
-          </button>
           <button
             onClick={() => setViewMode('visualization')}
             style={{
@@ -248,65 +217,74 @@ function App() {
               color: viewMode === 'visualization' ? 'white' : 'black',
             }}
           >
-            Visualization View
+            Visualization
+          </button>
+          <button
+            onClick={() => setViewMode('explorer')}
+            style={{
+              ...styles.toggleButton,
+              backgroundColor: viewMode === 'explorer' ? '#2196F3' : '#e0e0e0',
+              color: viewMode === 'explorer' ? 'white' : 'black',
+            }}
+          >
+            Explorer
           </button>
         </div>
       )}
 
-      {/* VISUALIZATION VIEW */}
-      {viewMode === 'visualization' && allFiles.length > 0 && (
+      {viewMode === 'visualization' && tree && (
         <div>
           <div style={styles.statsBox}>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Files:</span>
+              <span>Total Files:</span>
               <span style={styles.statValue}>{stats.total}</span>
             </div>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Size:</span>
+              <span>Total Size:</span>
               <span style={styles.statValue}>{stats.totalSize} KB</span>
             </div>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Lines:</span>
+              <span>Total Lines:</span>
               <span style={styles.statValue}>{stats.totalLines}</span>
             </div>
           </div>
 
-          <h2>Interactive File Graph</h2>
+          <h2>Hierarchical Tree Structure</h2>
           <p style={{ color: '#666', fontSize: '13px', marginBottom: '10px' }}>
-            Drag files around, zoom in/out. Click a file to see details.
+            Orange = Folder, Colored = File. Drag, zoom, pan to explore.
           </p>
 
           <Visualization 
-            files={allFiles} 
-            onNodeClick={setSelectedFile}
+            tree={tree}
+            onNodeClick={setSelectedNode}
           />
 
-          {selectedFile && (
-            <FileDetails file={selectedFile} />
+          {selectedNode && (
+            <div style={styles.detailsBox}>
+              <h3>{selectedNode.data.label.props.children[1].props.children}</h3>
+              <p style={styles.fullPath}>{selectedNode.data.path}</p>
+            </div>
           )}
         </div>
       )}
 
-      {/* EXPLORER VIEW */}
       {viewMode === 'explorer' && allFiles.length > 0 && (
         <div>
-          {/* Stats */}
           <div style={styles.statsBox}>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Files:</span>
+              <span>Total Files:</span>
               <span style={styles.statValue}>{stats.total}</span>
             </div>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Size:</span>
+              <span>Total Size:</span>
               <span style={styles.statValue}>{stats.totalSize} KB</span>
             </div>
             <div style={styles.statItem}>
-              <span style={styles.statLabel}>Total Lines:</span>
+              <span>Total Lines:</span>
               <span style={styles.statValue}>{stats.totalLines}</span>
             </div>
           </div>
 
-          {/* Filter */}
           <div style={styles.filterSection}>
             <h3>Filter by Type:</h3>
             <div style={styles.filterButtons}>
@@ -336,7 +314,6 @@ function App() {
             </div>
           </div>
 
-          {/* Sort */}
           <div style={styles.sortSection}>
             <h3>Sort by:</h3>
             <div style={styles.sortButtons}>
@@ -373,7 +350,6 @@ function App() {
             </div>
           </div>
 
-          {/* Search */}
           <div style={styles.searchFilesSection}>
             <h3>Search Files:</h3>
             <input
@@ -390,10 +366,9 @@ function App() {
             )}
           </div>
 
-          {/* Files */}
           {displayFiles && displayFiles.length > 0 && (
             <div style={styles.filesContainer}>
-              <h2>Files ({displayFiles.length}):</h2>
+              <h2>Files ({displayFiles.length})</h2>
               <div style={styles.filesList}>
                 {displayFiles.map((file) => (
                   <div
@@ -406,9 +381,9 @@ function App() {
                     }}
                   >
                     <h3>{file.label}</h3>
-                    <p>Type: {getFileType(file.label)}</p>
-                    <p>Lines: {file.lines || 0}</p>
-                    <p>Size: {((file.size || 0) / 1024).toFixed(2)} KB</p>
+                    <p>{file.type}</p>
+                    <p>{file.lines} LOC</p>
+                    <p>{((file.size || 0) / 1024).toFixed(2)} KB</p>
                   </div>
                 ))}
               </div>
@@ -418,27 +393,19 @@ function App() {
               )}
             </div>
           )}
-
-          {displayFiles.length === 0 && allFiles.length > 0 && (
-            <div style={styles.noResultsBox}>
-              <p>No files found matching your search.</p>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Empty */}
-      {!loading && allFiles.length === 0 && !error && (
+      {!loading && !tree && !error && (
         <div style={styles.emptyBox}>
           <h2>Ready to explore</h2>
-          <p>Enter folder path and click Search</p>
+          <p>Enter folder path and click Scan</p>
         </div>
       )}
     </div>
   );
 }
 
-// Styles
 const styles = {
   container: {
     maxWidth: '1400px',
@@ -448,7 +415,6 @@ const styles = {
     minHeight: '100vh',
     fontFamily: 'Arial, sans-serif',
   },
-
   header: {
     backgroundColor: '#2c3e50',
     color: 'white',
@@ -457,13 +423,11 @@ const styles = {
     textAlign: 'center',
     marginBottom: '30px',
   },
-
   searchBox: {
     display: 'flex',
     gap: '10px',
     marginBottom: '20px',
   },
-
   input: {
     flex: 1,
     padding: '12px',
@@ -472,18 +436,15 @@ const styles = {
     borderRadius: '6px',
     fontFamily: 'monospace',
   },
-
   button: {
     padding: '12px 30px',
     backgroundColor: '#2196F3',
     color: 'white',
     border: 'none',
     borderRadius: '6px',
-    fontSize: '14px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
-
   errorBox: {
     padding: '15px',
     backgroundColor: '#ffebee',
@@ -492,7 +453,6 @@ const styles = {
     marginBottom: '20px',
     color: '#c62828',
   },
-
   successBox: {
     padding: '15px',
     backgroundColor: '#e8f5e9',
@@ -501,13 +461,11 @@ const styles = {
     marginBottom: '20px',
     color: '#2e7d32',
   },
-
   viewToggle: {
     display: 'flex',
     gap: '10px',
     marginBottom: '20px',
   },
-
   toggleButton: {
     padding: '10px 20px',
     border: 'none',
@@ -516,7 +474,6 @@ const styles = {
     fontWeight: 'bold',
     fontSize: '13px',
   },
-
   statsBox: {
     display: 'flex',
     gap: '20px',
@@ -526,25 +483,17 @@ const styles = {
     marginBottom: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   statItem: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
+    gap: '8px',
   },
-
-  statLabel: {
-    fontSize: '12px',
-    color: '#666',
-    marginBottom: '5px',
-  },
-
   statValue: {
     fontSize: '24px',
     fontWeight: 'bold',
     color: '#2196F3',
   },
-
   filterSection: {
     padding: '20px',
     backgroundColor: 'white',
@@ -552,23 +501,20 @@ const styles = {
     marginBottom: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   filterButtons: {
     display: 'flex',
     gap: '10px',
     flexWrap: 'wrap',
     marginTop: '10px',
   },
-
   filterButton: {
     padding: '8px 15px',
     border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
-    fontSize: '12px',
     fontWeight: 'bold',
+    fontSize: '12px',
   },
-
   sortSection: {
     padding: '20px',
     backgroundColor: 'white',
@@ -576,23 +522,20 @@ const styles = {
     marginBottom: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   sortButtons: {
     display: 'flex',
     gap: '10px',
     flexWrap: 'wrap',
     marginTop: '10px',
   },
-
   sortButton: {
     padding: '8px 15px',
     border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
-    fontSize: '12px',
     fontWeight: 'bold',
+    fontSize: '12px',
   },
-
   searchFilesSection: {
     padding: '20px',
     backgroundColor: 'white',
@@ -600,7 +543,6 @@ const styles = {
     marginBottom: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   searchInput: {
     width: '100%',
     padding: '12px',
@@ -610,34 +552,28 @@ const styles = {
     marginTop: '10px',
     boxSizing: 'border-box',
   },
-
   searchResults: {
     marginTop: '10px',
     color: '#666',
     fontSize: '13px',
   },
-
   filesContainer: {
     marginBottom: '30px',
   },
-
   filesList: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
     gap: '15px',
     marginTop: '15px',
   },
-
   fileCard: {
     padding: '15px',
     backgroundColor: 'white',
     border: '2px solid #ddd',
     borderRadius: '8px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   detailsBox: {
     padding: '20px',
     backgroundColor: 'white',
@@ -646,7 +582,6 @@ const styles = {
     marginTop: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-
   fullPath: {
     marginTop: '10px',
     color: '#666',
@@ -654,15 +589,6 @@ const styles = {
     fontSize: '13px',
     wordBreak: 'break-all',
   },
-
-  noResultsBox: {
-    padding: '40px',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    textAlign: 'center',
-    marginTop: '20px',
-  },
-
   emptyBox: {
     textAlign: 'center',
     padding: '40px',
