@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import Visualization from './Visualization';
 import './App.css';
 
 const API_BASE = 'http://localhost:8000';
@@ -23,15 +24,11 @@ function App() {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Get file extension
-  const getFileExtension = (filename) => {
-    return filename.split('.').pop().toLowerCase();
-  };
+  const [viewMode, setViewMode] = useState('explorer'); // 'explorer' or 'visualization'
 
   // Get file type
   const getFileType = (filename) => {
-    const ext = getFileExtension(filename);
+    const ext = filename.split('.').pop().toLowerCase();
     const types = {
       'py': 'Python',
       'js': 'JavaScript',
@@ -41,6 +38,7 @@ function App() {
       'java': 'Java',
       'cpp': 'C++',
       'c': 'C',
+      'h': 'C Header',
       'html': 'HTML',
       'css': 'CSS',
       'scss': 'SCSS',
@@ -48,9 +46,38 @@ function App() {
       'xml': 'XML',
       'yaml': 'YAML',
       'yml': 'YAML',
+      'sql': 'SQL',
+      'rb': 'Ruby',
+      'go': 'Go',
+      'rs': 'Rust',
+      'php': 'PHP',
+      'sh': 'Shell',
+      'bat': 'Batch',
       'md': 'Markdown',
       'txt': 'Text',
-      'sql': 'SQL',
+      'pdf': 'PDF',
+      'doc': 'Word',
+      'docx': 'Word',
+      'xls': 'Excel',
+      'xlsx': 'Excel',
+      'mp4': 'Video',
+      'avi': 'Video',
+      'mov': 'Video',
+      'mkv': 'Video',
+      'mp3': 'Audio',
+      'wav': 'Audio',
+      'flac': 'Audio',
+      'jpg': 'Image',
+      'jpeg': 'Image',
+      'png': 'Image',
+      'gif': 'Image',
+      'svg': 'Image',
+      'ico': 'Image',
+      'zip': 'Archive',
+      'rar': 'Archive',
+      '7z': 'Archive',
+      'tar': 'Archive',
+      'gz': 'Archive',
     };
     return types[ext] || 'Other';
   };
@@ -64,33 +91,20 @@ function App() {
     return Array.from(types).sort();
   };
 
-  // Count files by type
-  const getFileCountByType = () => {
-    const counts = {};
-    allFiles.forEach(file => {
-      const type = getFileType(file.label);
-      counts[type] = (counts[type] || 0) + 1;
-    });
-    return counts;
-  };
-
-  // Search files
+  // Perform search with all filters
   const performSearch = (query, filterType, sortOption) => {
     let filtered = allFiles;
 
-    // Apply filter by type
     if (filterType !== 'all') {
       filtered = filtered.filter(file => getFileType(file.label) === filterType);
     }
 
-    // Apply search
     if (query.trim() !== '') {
       filtered = filtered.filter(file =>
         file.label.toLowerCase().includes(query.toLowerCase())
       );
     }
 
-    // Apply sort
     let sorted = [...filtered];
     if (sortOption === 'name') {
       sorted.sort((a, b) => a.label.localeCompare(b.label));
@@ -107,19 +121,16 @@ function App() {
     setDisplayFiles(sorted);
   };
 
-  // Handle search input
   const handleSearchChange = (query) => {
     setSearchQuery(query);
     performSearch(query, selectedFilter, sortBy);
   };
 
-  // Handle filter change
   const handleFilterChange = (filterType) => {
     setSelectedFilter(filterType);
     performSearch(searchQuery, filterType, sortBy);
   };
 
-  // Handle sort change
   const handleSortChange = (sortOption) => {
     setSortBy(sortOption);
     performSearch(searchQuery, selectedFilter, sortOption);
@@ -147,7 +158,7 @@ function App() {
       }
 
       if (response.data.nodes.length === 0) {
-        setError('No files found in this directory. Try a different path.');
+        setError('No files found in this directory');
         return;
       }
 
@@ -157,9 +168,7 @@ function App() {
     } catch (err) {
       console.error('Error:', err);
       if (err.code === 'ERR_NETWORK') {
-        setError('Cannot connect to backend. Make sure backend is running: python main.py');
-      } else if (err.response?.status === 404) {
-        setError('Path not found. Check your directory path.');
+        setError('Cannot connect to backend');
       } else {
         setError('Error: ' + (err.message || 'Unknown error'));
       }
@@ -168,7 +177,6 @@ function App() {
     }
   };
 
-  // When user presses Enter
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       scanRepo();
@@ -176,7 +184,6 @@ function App() {
   };
 
   const fileTypes = getUniqueFileTypes();
-  
   const stats = {
     total: allFiles.length,
     totalSize: (allFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(2),
@@ -188,7 +195,7 @@ function App() {
       {/* Header */}
       <div style={styles.header}>
         <h1>Repository Explorer</h1>
-        <p>View and find your files</p>
+        <p>Visualize and analyze your codebase</p>
       </div>
 
       {/* Search Box */}
@@ -210,195 +217,221 @@ function App() {
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div style={styles.errorBox}>
-          {error}
-        </div>
-      )}
+      {/* Error */}
+      {error && <div style={styles.errorBox}>{error}</div>}
 
-      {/* Success Message */}
+      {/* Success */}
       {allFiles.length > 0 && (
         <div style={styles.successBox}>
           Found {allFiles.length} files
         </div>
       )}
 
-      {/* Stats */}
+      {/* View Mode Toggle */}
       {allFiles.length > 0 && (
-        <div style={styles.statsBox}>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Total Files:</span>
-            <span style={styles.statValue}>{stats.total}</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Total Size:</span>
-            <span style={styles.statValue}>{stats.totalSize} KB</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Total Lines:</span>
-            <span style={styles.statValue}>{stats.totalLines}</span>
-          </div>
+        <div style={styles.viewToggle}>
+          <button
+            onClick={() => setViewMode('explorer')}
+            style={{
+              ...styles.toggleButton,
+              backgroundColor: viewMode === 'explorer' ? '#2196F3' : '#e0e0e0',
+              color: viewMode === 'explorer' ? 'white' : 'black',
+            }}
+          >
+            Explorer View
+          </button>
+          <button
+            onClick={() => setViewMode('visualization')}
+            style={{
+              ...styles.toggleButton,
+              backgroundColor: viewMode === 'visualization' ? '#2196F3' : '#e0e0e0',
+              color: viewMode === 'visualization' ? 'white' : 'black',
+            }}
+          >
+            Visualization View
+          </button>
         </div>
       )}
 
-      
-
-      {/* Filter Buttons */}
-      {allFiles.length > 0 && (
-        <div style={styles.filterSection}>
-          <h3>Filter by Type:</h3>
-          <div style={styles.filterButtons}>
-            <button
-              onClick={() => handleFilterChange('all')}
-              style={{
-                ...styles.filterButton,
-                backgroundColor: selectedFilter === 'all' ? '#2196F3' : '#e0e0e0',
-                color: selectedFilter === 'all' ? 'white' : 'black',
-              }}
-            >
-              All
-            </button>
-            {fileTypes.map(type => (
-              <button
-                key={type}
-                onClick={() => handleFilterChange(type)}
-                style={{
-                  ...styles.filterButton,
-                  backgroundColor: selectedFilter === type ? '#2196F3' : '#e0e0e0',
-                  color: selectedFilter === type ? 'white' : 'black',
-                }}
-              >
-                {type}
-              </button>
-            ))}
+      {/* VISUALIZATION VIEW */}
+      {viewMode === 'visualization' && allFiles.length > 0 && (
+        <div>
+          <div style={styles.statsBox}>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Files:</span>
+              <span style={styles.statValue}>{stats.total}</span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Size:</span>
+              <span style={styles.statValue}>{stats.totalSize} KB</span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Lines:</span>
+              <span style={styles.statValue}>{stats.totalLines}</span>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Sort Options */}
-      {allFiles.length > 0 && (
-        <div style={styles.sortSection}>
-          <h3>Sort by:</h3>
-          <div style={styles.sortButtons}>
-            <button
-              onClick={() => handleSortChange('name')}
-              style={{
-                ...styles.sortButton,
-                backgroundColor: sortBy === 'name' ? '#4CAF50' : '#e0e0e0',
-                color: sortBy === 'name' ? 'white' : 'black',
-              }}
-            >
-              Name
-            </button>
-            <button
-              onClick={() => handleSortChange('size-desc')}
-              style={{
-                ...styles.sortButton,
-                backgroundColor: sortBy === 'size-desc' ? '#4CAF50' : '#e0e0e0',
-                color: sortBy === 'size-desc' ? 'white' : 'black',
-              }}
-            >
-              Size (Large)
-            </button>
-            <button
-              onClick={() => handleSortChange('size-asc')}
-              style={{
-                ...styles.sortButton,
-                backgroundColor: sortBy === 'size-asc' ? '#4CAF50' : '#e0e0e0',
-                color: sortBy === 'size-asc' ? 'white' : 'black',
-              }}
-            >
-              Size (Small)
-            </button>
-            <button
-              onClick={() => handleSortChange('lines-desc')}
-              style={{
-                ...styles.sortButton,
-                backgroundColor: sortBy === 'lines-desc' ? '#4CAF50' : '#e0e0e0',
-                color: sortBy === 'lines-desc' ? 'white' : 'black',
-              }}
-            >
-              Lines (High)
-            </button>
-            <button
-              onClick={() => handleSortChange('lines-asc')}
-              style={{
-                ...styles.sortButton,
-                backgroundColor: sortBy === 'lines-asc' ? '#4CAF50' : '#e0e0e0',
-                color: sortBy === 'lines-asc' ? 'white' : 'black',
-              }}
-            >
-              Lines (Low)
-            </button>
-          </div>
-        </div>
-      )}
+          <h2>Interactive File Graph</h2>
+          <p style={{ color: '#666', fontSize: '13px', marginBottom: '10px' }}>
+            Drag files around, zoom in/out. Click a file to see details.
+          </p>
 
-      {/* Search Files */}
-      {allFiles.length > 0 && (
-        <div style={styles.searchFilesSection}>
-          <h3>Search Files:</h3>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Type filename to search... (e.g., main, app, config)"
-            style={styles.searchInput}
+          <Visualization 
+            files={allFiles} 
+            onNodeClick={setSelectedFile}
           />
-          {searchQuery && (
-            <p style={styles.searchResults}>
-              Found {displayFiles.length} file(s) matching "{searchQuery}"
-            </p>
-          )}
-        </div>
-      )}
 
-      {/* Files Display */}
-      {displayFiles && displayFiles.length > 0 && (
-        <div style={styles.filesContainer}>
-          <h2>Files ({displayFiles.length}):</h2>
-
-          <div style={styles.filesList}>
-            {displayFiles.map((file) => (
-              <div
-                key={file.id}
-                onClick={() => setSelectedFile(file)}
-                style={{
-                  ...styles.fileCard,
-                  backgroundColor: selectedFile?.id === file.id ? '#e3f2fd' : 'white',
-                  borderColor: selectedFile?.id === file.id ? '#2196F3' : '#ddd',
-                }}
-              >
-                <h3>{file.label}</h3>
-                <p>Type: {getFileType(file.label)}</p>
-                <p>Path: {file.path}</p>
-                <p>Lines: {file.lines || 0}</p>
-                <p>Size: {((file.size || 0) / 1024).toFixed(2)} KB</p>
-              </div>
-            ))}
-          </div>
-
-          {/* File Details */}
           {selectedFile && (
             <FileDetails file={selectedFile} />
           )}
         </div>
       )}
 
-      {/* No results */}
-      {allFiles.length > 0 && displayFiles.length === 0 && (
-        <div style={styles.noResultsBox}>
-          <p>No files found matching your search.</p>
-          <p>Try different search terms or remove filters.</p>
+      {/* EXPLORER VIEW */}
+      {viewMode === 'explorer' && allFiles.length > 0 && (
+        <div>
+          {/* Stats */}
+          <div style={styles.statsBox}>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Files:</span>
+              <span style={styles.statValue}>{stats.total}</span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Size:</span>
+              <span style={styles.statValue}>{stats.totalSize} KB</span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Lines:</span>
+              <span style={styles.statValue}>{stats.totalLines}</span>
+            </div>
+          </div>
+
+          {/* Filter */}
+          <div style={styles.filterSection}>
+            <h3>Filter by Type:</h3>
+            <div style={styles.filterButtons}>
+              <button
+                onClick={() => handleFilterChange('all')}
+                style={{
+                  ...styles.filterButton,
+                  backgroundColor: selectedFilter === 'all' ? '#2196F3' : '#e0e0e0',
+                  color: selectedFilter === 'all' ? 'white' : 'black',
+                }}
+              >
+                All
+              </button>
+              {fileTypes.map(type => (
+                <button
+                  key={type}
+                  onClick={() => handleFilterChange(type)}
+                  style={{
+                    ...styles.filterButton,
+                    backgroundColor: selectedFilter === type ? '#2196F3' : '#e0e0e0',
+                    color: selectedFilter === type ? 'white' : 'black',
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort */}
+          <div style={styles.sortSection}>
+            <h3>Sort by:</h3>
+            <div style={styles.sortButtons}>
+              <button
+                onClick={() => handleSortChange('name')}
+                style={{
+                  ...styles.sortButton,
+                  backgroundColor: sortBy === 'name' ? '#4CAF50' : '#e0e0e0',
+                  color: sortBy === 'name' ? 'white' : 'black',
+                }}
+              >
+                Name
+              </button>
+              <button
+                onClick={() => handleSortChange('size-desc')}
+                style={{
+                  ...styles.sortButton,
+                  backgroundColor: sortBy === 'size-desc' ? '#4CAF50' : '#e0e0e0',
+                  color: sortBy === 'size-desc' ? 'white' : 'black',
+                }}
+              >
+                Size (Large)
+              </button>
+              <button
+                onClick={() => handleSortChange('lines-desc')}
+                style={{
+                  ...styles.sortButton,
+                  backgroundColor: sortBy === 'lines-desc' ? '#4CAF50' : '#e0e0e0',
+                  color: sortBy === 'lines-desc' ? 'white' : 'black',
+                }}
+              >
+                Lines (High)
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div style={styles.searchFilesSection}>
+            <h3>Search Files:</h3>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Type filename..."
+              style={styles.searchInput}
+            />
+            {searchQuery && (
+              <p style={styles.searchResults}>
+                Found {displayFiles.length} file(s)
+              </p>
+            )}
+          </div>
+
+          {/* Files */}
+          {displayFiles && displayFiles.length > 0 && (
+            <div style={styles.filesContainer}>
+              <h2>Files ({displayFiles.length}):</h2>
+              <div style={styles.filesList}>
+                {displayFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    onClick={() => setSelectedFile(file)}
+                    style={{
+                      ...styles.fileCard,
+                      backgroundColor: selectedFile?.id === file.id ? '#e3f2fd' : 'white',
+                      borderColor: selectedFile?.id === file.id ? '#2196F3' : '#ddd',
+                    }}
+                  >
+                    <h3>{file.label}</h3>
+                    <p>Type: {getFileType(file.label)}</p>
+                    <p>Lines: {file.lines || 0}</p>
+                    <p>Size: {((file.size || 0) / 1024).toFixed(2)} KB</p>
+                  </div>
+                ))}
+              </div>
+
+              {selectedFile && (
+                <FileDetails file={selectedFile} />
+              )}
+            </div>
+          )}
+
+          {displayFiles.length === 0 && allFiles.length > 0 && (
+            <div style={styles.noResultsBox}>
+              <p>No files found matching your search.</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Empty */}
       {!loading && allFiles.length === 0 && !error && (
         <div style={styles.emptyBox}>
-          <h2>Get ready to explore your inventory</h2>
-          <p>Enter a folder path and click "Search"</p>
+          <h2>Ready to explore</h2>
+          <p>Enter folder path and click Search</p>
         </div>
       )}
     </div>
@@ -408,7 +441,7 @@ function App() {
 // Styles
 const styles = {
   container: {
-    maxWidth: '1200px',
+    maxWidth: '1400px',
     margin: '0 auto',
     padding: '20px',
     backgroundColor: '#f5f5f5',
@@ -469,6 +502,21 @@ const styles = {
     color: '#2e7d32',
   },
 
+  viewToggle: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '20px',
+  },
+
+  toggleButton: {
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: '13px',
+  },
+
   statsBox: {
     display: 'flex',
     gap: '20px',
@@ -497,8 +545,6 @@ const styles = {
     color: '#2196F3',
   },
 
-  
-
   filterSection: {
     padding: '20px',
     backgroundColor: 'white',
@@ -521,7 +567,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 'bold',
-    transition: 'all 0.2s',
   },
 
   sortSection: {
@@ -546,7 +591,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 'bold',
-    transition: 'all 0.2s',
   },
 
   searchFilesSection: {
@@ -579,7 +623,7 @@ const styles = {
 
   filesList: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
     gap: '15px',
     marginTop: '15px',
   },
@@ -609,7 +653,6 @@ const styles = {
     fontFamily: 'monospace',
     fontSize: '13px',
     wordBreak: 'break-all',
-    margin: '10px 0 0 0',
   },
 
   noResultsBox: {
