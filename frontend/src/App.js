@@ -6,10 +6,146 @@ import './App.css';
 const API_BASE = 'http://localhost:8000';
 
 function FileDetails({ file }) {
+  const [explanation, setExplanation] = useState(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  const getAIExplanation = async () => {
+    setLoadingAI(true);
+    try {
+      const response = await axios.post(
+        `${API_BASE}/api/ai-explain?file_path=${encodeURIComponent(file.full_path)}`
+      );
+      setExplanation(response.data);
+    } catch (err) {
+      console.error('Error:', err);
+      setExplanation({
+        error: 'Could not get explanation',
+        success: false
+      });
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   return (
     <div style={styles.detailsBox}>
       <h3>{file.label}</h3>
       <p style={styles.fullPath}>{file.full_path}</p>
+      
+      <button
+        onClick={getAIExplanation}
+        disabled={loadingAI}
+        style={{
+          ...styles.aiButton,
+          opacity: loadingAI ? 0.6 : 1,
+          marginTop: '15px'
+        }}
+      >
+        {loadingAI ? 'Analyzing...' : 'Explain with AI'}
+      </button>
+
+      {explanation && (
+        <div style={{
+          marginTop: '15px',
+          padding: '12px',
+          backgroundColor: '#f0f7ff',
+          border: '1px solid #2196F3',
+          borderRadius: '6px',
+        }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#2196F3' }}>AI Explanation:</h4>
+          {explanation.success ? (
+            <p style={{ margin: 0, color: '#333', fontSize: '13px', lineHeight: '1.6' }}>
+              {explanation.explanation}
+            </p>
+          ) : (
+            <p style={{ margin: 0, color: '#d32f2f', fontSize: '13px' }}>
+              {explanation.error || 'Could not generate explanation'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VisualizationFileDetails({ node, allFiles }) {
+  const [explanation, setExplanation] = useState(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  // Find the full file info
+  const fileInfo = allFiles.find(f => f.full_path === node.data.path);
+
+  const getAIExplanation = async () => {
+    setLoadingAI(true);
+    try {
+      const response = await axios.post(
+        `${API_BASE}/api/ai-explain?file_path=${encodeURIComponent(node.data.path)}`
+      );
+      setExplanation(response.data);
+    } catch (err) {
+      console.error('Error:', err);
+      setExplanation({
+        error: 'Could not get explanation',
+        success: false
+      });
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  // Extract file name from node
+  const fileName = node.data.label.props.children[1].props.children;
+  const isFile = node.data.label.props.children[0].props.children === '📄';
+
+  if (!isFile) {
+    return null; // Don't show details for folders
+  }
+
+  return (
+    <div style={styles.detailsBox}>
+      <h3>{fileName}</h3>
+      <p style={styles.fullPath}>{node.data.path}</p>
+      
+      {fileInfo && (
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
+          <p><strong>Type:</strong> {fileInfo.type}</p>
+          <p><strong>Lines of Code:</strong> {fileInfo.lines}</p>
+          <p><strong>Size:</strong> {((fileInfo.size || 0) / 1024).toFixed(2)} KB</p>
+        </div>
+      )}
+      
+      <button
+        onClick={getAIExplanation}
+        disabled={loadingAI}
+        style={{
+          ...styles.aiButton,
+          opacity: loadingAI ? 0.6 : 1,
+          marginTop: '15px'
+        }}
+      >
+        {loadingAI ? 'Analyzing...' : 'Explain with AI'}
+      </button>
+
+      {explanation && (
+        <div style={{
+          marginTop: '15px',
+          padding: '12px',
+          backgroundColor: '#f0f7ff',
+          border: '1px solid #2196F3',
+          borderRadius: '6px',
+        }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#2196F3' }}>AI Explanation:</h4>
+          {explanation.success ? (
+            <p style={{ margin: 0, color: '#333', fontSize: '13px', lineHeight: '1.6' }}>
+              {explanation.explanation}
+            </p>
+          ) : (
+            <p style={{ margin: 0, color: '#d32f2f', fontSize: '13px' }}>
+              {explanation.error || 'Could not generate explanation'}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -251,19 +387,20 @@ function App() {
 
           <h2>Hierarchical Tree Structure</h2>
           <p style={{ color: '#666', fontSize: '13px', marginBottom: '10px' }}>
-            Orange = Folder, Colored = File. Drag, zoom, pan to explore.
+            Orange = Folder, Colored = File. Drag, zoom, pan to explore. Click file to see details.
           </p>
 
           <Visualization 
             tree={tree}
+            //dependencies={dependencies}
             onNodeClick={setSelectedNode}
           />
 
-          {selectedNode && (
-            <div style={styles.detailsBox}>
-              <h3>{selectedNode.data.label.props.children[1].props.children}</h3>
-              <p style={styles.fullPath}>{selectedNode.data.path}</p>
-            </div>
+          {selectedNode && selectedNode.data.path && (
+            <VisualizationFileDetails 
+              node={selectedNode}
+              allFiles={allFiles}
+            />
           )}
         </div>
       )}
@@ -595,6 +732,16 @@ const styles = {
     backgroundColor: 'white',
     borderRadius: '8px',
     marginTop: '20px',
+  },
+  aiButton: {
+    padding: '10px 20px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontWeight: 'bold',
+    fontSize: '13px',
+    cursor: 'pointer',
   },
 };
 
