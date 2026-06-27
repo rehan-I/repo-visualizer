@@ -72,14 +72,19 @@ function VisualizationFileDetails({ node, allFiles }) {
   const [explanation, setExplanation] = useState(null);
   const [loadingAI, setLoadingAI] = useState(false);
 
-  // Find the full file info
-  const fileInfo = allFiles.find(f => f.full_path === node.data.path);
+  // Get file info from node data directly
+  const fileName = node.data.label.props.children[1].props.children;
+  const isFile = node.data.label.props.children[0].props.children === '📄';
+  const filePath = node.data.path;
+  const fileType = node.data.fileType || 'Other';
+  const lines = node.data.lines || 0;
+  const size = node.data.size || 0;
 
   const getAIExplanation = async () => {
     setLoadingAI(true);
     try {
       const response = await axios.post(
-        `${API_BASE}/api/ai-explain?file_path=${encodeURIComponent(node.data.path)}`
+        `${API_BASE}/api/ai-explain?file_path=${encodeURIComponent(filePath)}`
       );
       setExplanation(response.data);
     } catch (err) {
@@ -93,10 +98,6 @@ function VisualizationFileDetails({ node, allFiles }) {
     }
   };
 
-  // Extract file name from node
-  const fileName = node.data.label.props.children[1].props.children;
-  const isFile = node.data.label.props.children[0].props.children === '📄';
-
   if (!isFile) {
     return null; // Don't show details for folders
   }
@@ -104,15 +105,19 @@ function VisualizationFileDetails({ node, allFiles }) {
   return (
     <div style={styles.detailsBox}>
       <h3>{fileName}</h3>
-      <p style={styles.fullPath}>{node.data.path}</p>
+      <p style={styles.fullPath}>{filePath}</p>
       
-      {fileInfo && (
-        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
-          <p><strong>Type:</strong> {fileInfo.type}</p>
-          <p><strong>Lines of Code:</strong> {fileInfo.lines}</p>
-          <p><strong>Size:</strong> {((fileInfo.size || 0) / 1024).toFixed(2)} KB</p>
-        </div>
-      )}
+      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
+        <p style={{ margin: '8px 0' }}>
+          <strong>Type:</strong> {fileType}
+        </p>
+        <p style={{ margin: '8px 0' }}>
+          <strong>Lines of Code:</strong> {lines}
+        </p>
+        <p style={{ margin: '8px 0' }}>
+          <strong>Size:</strong> {(size / 1024).toFixed(2)} KB
+        </p>
+      </div>
       
       <button
         onClick={getAIExplanation}
