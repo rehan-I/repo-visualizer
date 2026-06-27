@@ -20,11 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import AI (optional)
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+
+import google.generativeai as genai
+
 
 # Constants
 IGNORE_DIRS = {
@@ -48,11 +46,13 @@ class IDGenerator:
         self.counter = 0
     
     def get_id(self):
+        current = self.counter
         self.counter += 1
-        return str(self.counter - 1)
+        return str(current)
 
 id_gen = IDGenerator()
-file_map = {}
+file_map = {}  # Maps filename -> {id, path}
+all_files = {}  # Maps id -> {name, path, type}
 
 # Helper functions
 def should_ignore_dir(dirname):
@@ -85,35 +85,50 @@ def extract_dependencies(file_path: Path):
     """Extract imports/includes from a file"""
     dependencies = []
     
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-    except:
-        return dependencies
     
-    # Python imports
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read(5000)  # Read first 5000 chars
+
+    
+    # Python imports - import x, from x import y
     if file_path.suffix.lower() == '.py':
+        # import module
         import_pattern = r'^import\s+([\w.]+)'
         for match in re.finditer(import_pattern, content, re.MULTILINE):
             module = match.group(1).split('.')[0]
             dependencies.append(module)
         
+        # from module import x
         from_pattern = r'^from\s+([\w.]+)\s+import'
         for match in re.finditer(from_pattern, content, re.MULTILINE):
             module = match.group(1).split('.')[0]
             dependencies.append(module)
     
-    # C++ includes
+    # C/C++ includes - #include "file.h" or #include <file.h>
     if file_path.suffix.lower() in ['.cpp', '.cc', '.cxx', '.c', '.h', '.hpp']:
-        include_pattern = r'#include\s+"([^"]+)"'
+        # #include "filename"
+        include_pattern = r'#include\s*[<"]([^>"]+)[>"]'
         for match in re.finditer(include_pattern, content):
+            include_file = match.group(1)
+            dependencies.append(include_file)
+    
+    # JavaScript/TypeScript imports
+    if file_path.suffix.lower() in ['.js', '.jsx', '.ts', '.tsx']:
+        # import x from 'y'
+        js_import = r"import\s+.*?\s+from\s+['\"]([^'\"]+)['\"]"
+        for match in re.finditer(js_import, content):
+            dependencies.append(match.group(1))
+        
+        # require('x')
+        require_pattern = r"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"
+        for match in re.finditer(require_pattern, content):
             dependencies.append(match.group(1))
     
-    return list(set(dependencies))
+    return list(set(dependencies))  # Remove duplicates
 
 def build_tree(path: str, depth: int = 0):
     """Build hierarchical folder and file structure"""
-    global id_gen, file_map
+    global id_gen, file_map, all_files
     
     if depth >= MAX_DEPTH:
         return None
@@ -155,22 +170,29 @@ def build_tree(path: str, depth: int = 0):
                         pass
                     
                     file_id = id_gen.get_id()
+                    file_type = get_file_type(item.name)
                     dependencies = extract_dependencies(item)
                     
                     file_node = {
                         "id": file_id,
                         "name": item.name,
                         "type": "file",
-                        "fileType": get_file_type(item.name),
+                        "fileType": file_type,
                         "lines": lines,
                         "size": file_size,
                         "path": str(item),
                         "dependencies": dependencies,
                     }
                     
+                    # Store file info for dependency matching
                     file_map[item.name] = {
                         "id": file_id,
                         "path": str(item)
+                    }
+                    all_files[file_id] = {
+                        "name": item.name,
+                        "path": str(item),
+                        "type": file_type
                     }
                     
                     children.append(file_node)
@@ -188,20 +210,43 @@ def build_tree(path: str, depth: int = 0):
     return folder_node
 
 def find_dependencies_in_tree(node):
-    """Find actual file dependencies in the tree"""
+    """Find actual file dependencies in the tree and create edges"""
     dependencies = []
     
+    # If this is a file with dependencies
     if node.get('type') == 'file' and node.get('dependencies'):
+        from_id = node['id']
+        
         for dep in node['dependencies']:
+            # Try to find matching file
+            dep_lower = dep.lower()
+            
+            # Direct match: look for exact filename
             for fname, info in file_map.items():
-                if dep.lower() in fname.lower() or fname.lower().startswith(dep.lower()):
-                    dependencies.append({
-                        "from": node['id'],
-                        "to": info['id'],
-                        "label": dep
-                    })
+                fname_lower = fname.lower()
+                
+                # Check if dependency matches this file
+                if (dep_lower == fname_lower or 
+                    dep_lower == fname_lower.replace('.py', '') or
+                    dep_lower == fname_lower.replace('.js', '') or
+                    dep_lower == fname_lower.replace('.ts', '') or
+                    dep_lower == fname_lower.replace('.h', '') or
+                    dep_lower == fname_lower.replace('.cpp', '') or
+                    dep_lower in fname_lower or
+                    fname_lower.startswith(dep_lower)):
+                    
+                    to_id = info['id']
+                    
+                    # Don't create self-loops
+                    if from_id != to_id:
+                        dependencies.append({
+                            "from": from_id,
+                            "to": to_id,
+                            "label": dep
+                        })
                     break
     
+    # Recursively check children
     if node.get('children'):
         for child in node['children']:
             dependencies.extend(find_dependencies_in_tree(child))
@@ -209,18 +254,20 @@ def find_dependencies_in_tree(node):
     return dependencies
 
 def scan_directory(path: str):
-    """Scan directory and return hierarchical structure"""
-    global id_gen, file_map
+    """Scan directory and return hierarchical structure with dependencies"""
+    global id_gen, file_map, all_files
+    
     id_gen = IDGenerator()
     file_map = {}
+    all_files = {}
     
     path_obj = Path(path)
     
     if not path_obj.exists():
-        return {"error": "Path does not exist", "tree": None}
+        return {"error": "Path does not exist", "tree": None, "dependencies": []}
     
     if not path_obj.is_dir():
-        return {"error": "Path is not a directory", "tree": None}
+        return {"error": "Path is not a directory", "tree": None, "dependencies": []}
     
     try:
         tree = build_tree(path)
@@ -233,7 +280,8 @@ def scan_directory(path: str):
             "error": None
         }
     except Exception as e:
-        return {"error": str(e), "tree": None}
+        print(f"Error: {e}")
+        return {"error": str(e), "tree": None, "dependencies": []}
 
 # API Routes
 @app.post("/api/scan")
@@ -246,20 +294,10 @@ async def scan_repo(repo_path: str = "."):
 async def explain_file(file_path: str):
     """Get AI explanation of a file"""
     
-    if not genai:
-        return {
-            "error": "genai not installed",
-            "explanation": "Install with: pip install google-generativeai",
-            "success": False
-        }
+   
     
     api_key = os.getenv('GOOGLE_API_KEY')
-    if not api_key:
-        return {
-            "error": "API key not configured",
-            "explanation": "Add GOOGLE_API_KEY to .env file",
-            "success": False
-        }
+    
     
     try:
         path_obj = Path(file_path)
