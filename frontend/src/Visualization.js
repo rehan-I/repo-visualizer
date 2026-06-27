@@ -10,7 +10,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-function Visualization({ tree, onNodeClick }) {
+function Visualization({ tree, dependencies, onNodeClick }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -24,16 +24,21 @@ function Visualization({ tree, onNodeClick }) {
     const nodesList = [];
     const edgesList = [];
 
-    function traverse(node, level = 0, index = 0) {
+    function traverse(node, level = 0, index = 0, parentChildren = 1) {
       const nodeId = node.id;
-      const x = level * 300;
-      const y = index * 150;
+      
+      // Better spacing: 
+      // - level determines X (depth)
+      // - index determines Y (position among siblings)
+      // - spread children wider to avoid overlap
+      const xSpacing = 350;  // Space between levels
+      const ySpacing = 180;  // Space between siblings
+      
+      const x = level * xSpacing;
+      const y = index * ySpacing;
 
-      // Check if it's a folder - MUST match backend
       const isFolder = node.type === 'folder';
       
-      console.log(`Node: ${node.name}, Type: ${node.type}, IsFolder: ${isFolder}`);
-
       const nodeObj = {
         id: nodeId,
         data: {
@@ -50,9 +55,17 @@ function Visualization({ tree, onNodeClick }) {
                   {node.fileType}
                 </div>
               )}
+              {!isFolder && (
+                <div style={{ fontSize: '8px', opacity: 0.6, marginTop: '2px' }}>
+                  {node.lines} LOC
+                </div>
+              )}
             </div>
           ),
           path: node.path,
+          fileType: node.fileType,
+          lines: node.lines,
+          size: node.size,
         },
         position: { x, y },
         style: {
@@ -61,38 +74,69 @@ function Visualization({ tree, onNodeClick }) {
           border: '2px solid #333',
           borderRadius: '8px',
           padding: '10px',
-          minWidth: '120px',
-          minHeight: '100px',
+          minWidth: '130px',
+          minHeight: '110px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
           fontWeight: 'bold',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
         },
       };
       
       nodesList.push(nodeObj);
 
+      // Folder-to-child edges (solid gray)
       if (node.children && node.children.length > 0) {
         node.children.forEach((child, idx) => {
-          traverse(child, level + 1, idx);
+          traverse(child, level + 1, idx, node.children.length);
           edgesList.push({
             id: `${nodeId}-${child.id}`,
             source: nodeId,
             target: child.id,
             animated: false,
+            style: {
+              stroke: '#999',
+              strokeWidth: 1,
+            }
           });
         });
       }
     }
 
     traverse(tree);
-    console.log('Total nodes:', nodesList.length);
-    console.log('Nodes:', nodesList);
+    
+    // Add DEPENDENCY edges (red dashed - Hidden Relationships!)
+    if (dependencies && dependencies.length > 0) {
+      dependencies.forEach((dep, idx) => {
+        edgesList.push({
+          id: `dep-${dep.from}-${dep.to}-${idx}`,
+          source: dep.from,
+          target: dep.to,
+          animated: true,
+          style: {
+            stroke: '#f44336',
+            strokeDasharray: '5,5',
+            strokeWidth: 2,
+          },
+          label: dep.label,
+          labelStyle: {
+            backgroundColor: '#fff',
+            color: '#f44336',
+            fontSize: '10px',
+            fontWeight: 'bold',
+            padding: '2px 4px',
+            borderRadius: '3px',
+            border: '1px solid #f44336'
+          }
+        });
+      });
+    }
     
     setNodes(nodesList);
     setEdges(edgesList);
-  }, [tree, setNodes, setEdges]);
+  }, [tree, dependencies, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((event, node) => {
     if (onNodeClick) {
@@ -101,7 +145,7 @@ function Visualization({ tree, onNodeClick }) {
   }, [onNodeClick]);
 
   return (
-    <div style={{ width: '100%', height: '700px', border: '2px solid #ddd', borderRadius: '8px' }}>
+    <div style={{ width: '100%', height: '700px', border: '2px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
