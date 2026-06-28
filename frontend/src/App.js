@@ -155,6 +155,81 @@ function VisualizationFileDetails({ node, allFiles }) {
   );
 }
 
+function DependenciesPanel({ dependencies, allFiles }) {
+  if (!dependencies || dependencies.length === 0) {
+    return (
+      <div style={styles.noDependenciesBox}>
+        <p>No dependencies detected in this repository</p>
+      </div>
+    );
+  }
+
+  // Get file type and import keyword
+  const getImportInfo = (fromFile) => {
+    if (!fromFile) return { type: 'Unknown', keyword: 'imports' };
+    
+    const ext = fromFile.split('.').pop().toLowerCase();
+    
+    const importTypes = {
+      'py': { type: 'Python', keyword: 'import' },
+      'js': { type: 'JavaScript', keyword: 'import' },
+      'jsx': { type: 'JavaScript', keyword: 'import' },
+      'ts': { type: 'TypeScript', keyword: 'import' },
+      'tsx': { type: 'TypeScript', keyword: 'import' },
+      'cpp': { type: 'C++', keyword: 'include' },
+      'cc': { type: 'C++', keyword: 'include' },
+      'cxx': { type: 'C++', keyword: 'include' },
+      'c': { type: 'C', keyword: 'include' },
+      'h': { type: 'C Header', keyword: 'include' },
+      'hpp': { type: 'C++ Header', keyword: 'include' },
+      'java': { type: 'Java', keyword: 'import' },
+      'go': { type: 'Go', keyword: 'import' },
+      'rs': { type: 'Rust', keyword: 'use' },
+      'rb': { type: 'Ruby', keyword: 'require' },
+      'php': { type: 'PHP', keyword: 'require' },
+    };
+    
+    return importTypes[ext] || { type: 'Unknown', keyword: 'imports' };
+  };
+
+  return (
+    <div style={styles.dependenciesPanel}>
+      <h3>Dependencies Found ({dependencies.length})</h3>
+      <p style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>
+        Shows which files import/include other files
+      </p>
+      
+      <div style={styles.dependenciesList}>
+        {dependencies.map((dep, idx) => {
+          const importInfo = getImportInfo(dep.from_file);
+          
+          return (
+            <div key={idx} style={styles.dependencyItem}>
+              <div style={styles.dependencyFrom}>
+                <strong>📄 {dep.from_file || 'Unknown'}</strong>
+              </div>
+              
+              <div style={styles.dependencyArrow}>⬇</div>
+              
+              <div style={styles.dependencyImport}>
+                <span style={styles.languageTag}>{importInfo.type}</span>
+                <span style={styles.importKeyword}>{importInfo.keyword}</span>
+                <code style={styles.importName}>{dep.label}</code>
+              </div>
+              
+              <div style={styles.dependencyArrow}>⬇</div>
+              
+              <div style={styles.dependencyTo}>
+                <strong>📄 {dep.to_file || 'Unknown'}</strong>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [repoPath, setRepoPath] = useState('.');
   const [tree, setTree] = useState(null);
@@ -401,10 +476,10 @@ function App() {
           <p style={{ color: '#666', fontSize: '13px', marginBottom: '10px' }}>
             Orange = Folder, Colored = File. Drag, zoom, pan to explore. Click file to see details.
           </p>
-
+        
           <Visualization 
             tree={tree}
-            //dependencies={dependencies}
+            dependencies={dependencies}
             onNodeClick={setSelectedNode}
           />
 
@@ -414,6 +489,11 @@ function App() {
               allFiles={allFiles}
             />
           )}
+        
+          <DependenciesPanel 
+            dependencies={dependencies} 
+            allFiles={allFiles}
+          />
         </div>
       )}
 
@@ -754,6 +834,90 @@ const styles = {
     fontWeight: 'bold',
     fontSize: '13px',
     cursor: 'pointer',
+  },
+  dependenciesPanel: {
+    padding: '20px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    marginTop: '20px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+  dependenciesList: {
+    display: 'grid',
+    gap: '15px',
+  },
+  dependencyItem: {
+    padding: '15px',
+    backgroundColor: '#f5f5f5',
+    border: '2px solid #f44336',
+    borderRadius: '6px',
+    textAlign: 'center',
+  },
+  dependencyFrom: {
+    padding: '10px',
+    backgroundColor: '#fff',
+    borderRadius: '4px',
+    marginBottom: '8px',
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  dependencyArrow: {
+    color: '#f44336',
+    fontSize: '20px',
+    margin: '6px 0',
+    fontWeight: 'bold',
+  },
+  dependencyImport: {
+    padding: '12px',
+    backgroundColor: '#ffe0e0',
+    borderRadius: '4px',
+    margin: '8px 0',
+    fontSize: '13px',
+    display: 'flex',
+    gap: '8px',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  languageTag: {
+    backgroundColor: '#f44336',
+    color: 'white',
+    padding: '4px 8px',
+    borderRadius: '3px',
+    fontWeight: 'bold',
+    fontSize: '11px',
+  },
+  importKeyword: {
+    fontWeight: 'bold',
+    color: '#d32f2f',
+  },
+  importName: {
+    backgroundColor: '#fff',
+    padding: '2px 6px',
+    borderRadius: '3px',
+    fontFamily: 'monospace',
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  dependencyTo: {
+    padding: '10px',
+    backgroundColor: '#fff',
+    borderRadius: '4px',
+    marginTop: '8px',
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  noDependenciesBox: {
+    padding: '20px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '8px',
+    textAlign: 'center',
+    color: '#999',
+    marginTop: '20px',
   },
 };
 

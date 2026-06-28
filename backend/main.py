@@ -252,28 +252,39 @@ def find_dependencies_in_tree(node):
     """Find actual file dependencies in the tree and create edges"""
     dependencies = []
     
-    # If this is a file with dependencies
     if node.get('type') == 'file' and node.get('dependencies'):
         from_id = node['id']
+        from_name = node['name']
         
         for dep in node['dependencies']:
             # Try to find matching file
             dep_lower = dep.lower()
             
-            # Direct match: look for exact filename
+            # Search in file_map
             for fname, info in file_map.items():
                 fname_lower = fname.lower()
+                fname_no_ext = fname_lower.rsplit('.', 1)[0]  # Remove extension
                 
-                # Check if dependency matches this file
-                if (dep_lower == fname_lower or 
-                    dep_lower == fname_lower.replace('.py', '') or
-                    dep_lower == fname_lower.replace('.js', '') or
-                    dep_lower == fname_lower.replace('.ts', '') or
-                    dep_lower == fname_lower.replace('.h', '') or
-                    dep_lower == fname_lower.replace('.cpp', '') or
-                    dep_lower in fname_lower or
-                    fname_lower.startswith(dep_lower)):
-                    
+                # Multiple matching strategies
+                match = False
+                
+                # Strategy 1: Exact match
+                if dep_lower == fname_lower:
+                    match = True
+                
+                # Strategy 2: Match without extension (Python: "utils" matches "utils.py")
+                elif dep_lower == fname_no_ext:
+                    match = True
+                
+                # Strategy 3: File starts with dependency name
+                elif fname_no_ext.startswith(dep_lower):
+                    match = True
+                
+                # Strategy 4: Dependency in filename (for includes like "utils.h")
+                elif dep_lower in fname_lower:
+                    match = True
+                
+                if match:
                     to_id = info['id']
                     
                     # Don't create self-loops
@@ -281,9 +292,11 @@ def find_dependencies_in_tree(node):
                         dependencies.append({
                             "from": from_id,
                             "to": to_id,
-                            "label": dep
+                            "label": dep,
+                            "from_file": from_name,
+                            "to_file": fname
                         })
-                    break
+                    break  # Found match, move to next dependency
     
     # Recursively check children
     if node.get('children'):
