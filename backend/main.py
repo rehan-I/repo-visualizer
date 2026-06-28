@@ -126,6 +126,45 @@ def extract_dependencies(file_path: Path):
     
     return list(set(dependencies))  # Remove duplicates
 
+def scan_directory(path: str):
+    """Scan directory and return hierarchical structure with dependencies"""
+    global id_gen, file_map, all_files
+    
+    id_gen = IDGenerator()
+    file_map = {}
+    all_files = {}
+    
+    path_obj = Path(path)
+    
+    if not path_obj.exists():
+        return {"error": "Path does not exist", "tree": None, "dependencies": []}
+    
+    if not path_obj.is_dir():
+        return {"error": "Path is not a directory", "tree": None, "dependencies": []}
+    
+    try:
+        tree = build_tree(path)
+        dependencies = find_dependencies_in_tree(tree) if tree else []
+        
+        # DEBUG: Print what we found
+        print(f"\n=== DEPENDENCY SCAN RESULTS ===")
+        print(f"Files found: {len(file_map)}")
+        print(f"File map: {file_map}")
+        print(f"Dependencies found: {len(dependencies)}")
+        if dependencies:
+            print(f"Dependencies: {dependencies}")
+        print(f"==============================\n")
+        
+        return {
+            "tree": tree,
+            "dependencies": dependencies,
+            "root": str(path_obj),
+            "error": None
+        }
+    except Exception as e:
+        print(f"Error: {e}")
+        return {"error": str(e), "tree": None, "dependencies": []}
+    
 def build_tree(path: str, depth: int = 0):
     """Build hierarchical folder and file structure"""
     global id_gen, file_map, all_files
@@ -322,6 +361,8 @@ Code:
 {content}
 
 Explanation:"""
+        
+
         
         response = model.generate_content(prompt)
         

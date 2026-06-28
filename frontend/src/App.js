@@ -168,6 +168,7 @@ function App() {
   const [sortBy, setSortBy] = useState('name');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('visualization');
+  const [dependencies, setDependencies] = useState([]);
 
   const getFileType = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
@@ -283,7 +284,13 @@ function App() {
         return;
       }
 
+      // DEBUG: Log dependencies
+      console.log('Backend response:', response.data);
+      console.log('Dependencies received:', response.data.dependencies);
+      console.log('Number of dependencies:', response.data.dependencies?.length || 0);
+
       setTree(response.data.tree);
+      setDependencies(response.data.dependencies || []);
 
       // Extract all files from tree for explorer view
       const files = extractFilesFromTree(response.data.tree);
