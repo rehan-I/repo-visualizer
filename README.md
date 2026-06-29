@@ -41,5 +41,5 @@ The React frontend transforms the backend data into an interactive, drag-and-dro
 
 * Start the backend server from the backend directory using `python main.py` (runs on `http://0.0.0.0:8000`).
 * Start the frontend development server from the frontend directory using `npm start` (runs on `http://localhost:3000`).
-* Open your browser, enter a local folder path (e.g., `.`), and click "Scan" to generate your codebase visualization.
+
 
