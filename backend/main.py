@@ -249,54 +249,19 @@ def build_tree(path: str, depth: int = 0):
     return folder_node
 
 def find_dependencies_in_tree(node):
-    """Find actual file dependencies in the tree and create edges"""
+    """Extract all imports/includes from files (not file matching)"""
     dependencies = []
     
     if node.get('type') == 'file' and node.get('dependencies'):
-        from_id = node['id']
-        from_name = node['name']
+        from_file = node['name']
         
+        # Return each import as a dependency
         for dep in node['dependencies']:
-            # Try to find matching file
-            dep_lower = dep.lower()
-            
-            # Search in file_map
-            for fname, info in file_map.items():
-                fname_lower = fname.lower()
-                fname_no_ext = fname_lower.rsplit('.', 1)[0]  # Remove extension
-                
-                # Multiple matching strategies
-                match = False
-                
-                # Strategy 1: Exact match
-                if dep_lower == fname_lower:
-                    match = True
-                
-                # Strategy 2: Match without extension (Python: "utils" matches "utils.py")
-                elif dep_lower == fname_no_ext:
-                    match = True
-                
-                # Strategy 3: File starts with dependency name
-                elif fname_no_ext.startswith(dep_lower):
-                    match = True
-                
-                # Strategy 4: Dependency in filename (for includes like "utils.h")
-                elif dep_lower in fname_lower:
-                    match = True
-                
-                if match:
-                    to_id = info['id']
-                    
-                    # Don't create self-loops
-                    if from_id != to_id:
-                        dependencies.append({
-                            "from": from_id,
-                            "to": to_id,
-                            "label": dep,
-                            "from_file": from_name,
-                            "to_file": fname
-                        })
-                    break  # Found match, move to next dependency
+            dependencies.append({
+                "file": from_file,
+                "import": dep,
+                "language": get_import_language(node['fileType'])
+            })
     
     # Recursively check children
     if node.get('children'):
@@ -305,6 +270,22 @@ def find_dependencies_in_tree(node):
     
     return dependencies
 
+def get_import_language(file_type):
+    """Get import keyword for language"""
+    lang_keywords = {
+        'Python': 'import',
+        'JavaScript': 'import',
+        'TypeScript': 'import',
+        'C++': 'include',
+        'C': 'include',
+        'C Header': 'include',
+        'Java': 'import',
+        'Go': 'import',
+        'Ruby': 'require',
+        'PHP': 'require',
+        'Rust': 'use',
+    }
+    return lang_keywords.get(file_type, 'import')
 def scan_directory(path: str):
     """Scan directory and return hierarchical structure with dependencies"""
     global id_gen, file_map, all_files

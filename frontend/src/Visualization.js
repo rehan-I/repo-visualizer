@@ -1,7 +1,5 @@
 import React, { useCallback } from 'react';
 import ReactFlow, {
-  // Node,
-  // Edge,
   Controls,
   Background,
   useNodesState,
@@ -24,18 +22,62 @@ function Visualization({ tree, dependencies, onNodeClick }) {
     const nodesList = [];
     const edgesList = [];
 
-    function traverse(node, level = 0, index = 0, parentChildren = 1) {
+    // Spacing configuration
+    const LEVEL_HEIGHT = 250;   // Vertical space between levels
+    const SIBLING_DISTANCE = 150; // Horizontal space between siblings
+    const SUBTREE_DISTANCE = 200; // Horizontal space between subtrees
+
+    // Calculate positions using tree layout algorithm
+    function calculateLayout(node) {
+      // Leaf node
+      if (!node.children || node.children.length === 0) {
+        node.width = SIBLING_DISTANCE;
+        node.x = 0;
+        return;
+      }
+
+      // Process all children first
+      node.children.forEach(child => {
+        calculateLayout(child);
+      });
+
+      // Calculate positions for children
+      let currentX = 0;
+      let maxChildWidth = 0;
+
+      node.children.forEach((child, index) => {
+        if (index > 0) {
+          currentX += SUBTREE_DISTANCE; // Space between subtrees
+        }
+        
+        child.x = currentX;
+        currentX += child.width;
+        maxChildWidth = Math.max(maxChildWidth, child.width);
+      });
+
+      // Position this node at center of children
+      const totalChildrenWidth = currentX;
+      node.width = Math.max(totalChildrenWidth, SIBLING_DISTANCE);
+      
+      // Center the node above its children
+      let childrenCenterX = 0;
+      if (node.children.length > 0) {
+        const firstChildX = node.children[0].x;
+        const lastChildX = node.children[node.children.length - 1].x;
+        childrenCenterX = (firstChildX + lastChildX) / 2;
+      }
+      
+      node.x = childrenCenterX - SIBLING_DISTANCE / 2;
+    }
+
+    // Apply layout calculation
+    calculateLayout(tree);
+
+    // Create nodes and edges with calculated positions
+    function traverse(node, level = 0, absoluteX = 0) {
       const nodeId = node.id;
-      
-      // Better spacing: 
-      // - level determines X (depth)
-      // - index determines Y (position among siblings)
-      // - spread children wider to avoid overlap
-      const xSpacing = 350;  // Space between levels
-      const ySpacing = 180;  // Space between siblings
-      
-      const x = level * xSpacing;
-      const y = index * ySpacing;
+      const x = absoluteX + node.x;
+      const y = level * LEVEL_HEIGHT;
 
       const isFolder = node.type === 'folder';
       
@@ -87,10 +129,11 @@ function Visualization({ tree, dependencies, onNodeClick }) {
       
       nodesList.push(nodeObj);
 
-      // Folder-to-child edges (solid gray)
+      // Create edges to children
       if (node.children && node.children.length > 0) {
-        node.children.forEach((child, idx) => {
-          traverse(child, level + 1, idx, node.children.length);
+        node.children.forEach((child) => {
+          traverse(child, level + 1, absoluteX + node.x);
+          
           edgesList.push({
             id: `${nodeId}-${child.id}`,
             source: nodeId,
@@ -107,32 +150,7 @@ function Visualization({ tree, dependencies, onNodeClick }) {
 
     traverse(tree);
     
-    // Add DEPENDENCY edges (red dashed - Hidden Relationships!)
-    if (dependencies && dependencies.length > 0) {
-      dependencies.forEach((dep, idx) => {
-        edgesList.push({
-          id: `dep-${dep.from}-${dep.to}-${idx}`,
-          source: dep.from,
-          target: dep.to,
-          animated: true,
-          style: {
-            stroke: '#f44336',
-            strokeDasharray: '5,5',
-            strokeWidth: 2,
-          },
-          label: dep.label,
-          labelStyle: {
-            backgroundColor: '#fff',
-            color: '#f44336',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            padding: '2px 4px',
-            borderRadius: '3px',
-            border: '1px solid #f44336'
-          }
-        });
-      });
-    }
+    
     
     setNodes(nodesList);
     setEdges(edgesList);
