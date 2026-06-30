@@ -5,13 +5,13 @@ import os
 from dotenv import load_dotenv
 import re
 
-# Load environment variables
+
 load_dotenv()
 
-# Initialize FastAPI app FIRST
+
 app = FastAPI()
 
-# Add middleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -223,7 +223,7 @@ def build_tree(path: str, depth: int = 0):
                         "dependencies": dependencies,
                     }
                     
-                    # Store file info for dependency matching
+                    # Storingg file info for dependency matching
                     file_map[item.name] = {
                         "id": file_id,
                         "path": str(item)

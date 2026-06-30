@@ -22,7 +22,7 @@ function Visualization({ tree, dependencies, onNodeClick }) {
     const nodesList = [];
     const edgesList = [];
 
-    // Spacing configuration
+    // Spacing 
     const LEVEL_HEIGHT = 250;   // Vertical space between levels
     const SIBLING_DISTANCE = 150; // Horizontal space between siblings
     const SUBTREE_DISTANCE = 200; // Horizontal space between subtrees
@@ -70,7 +70,7 @@ function Visualization({ tree, dependencies, onNodeClick }) {
       node.x = childrenCenterX - SIBLING_DISTANCE / 2;
     }
 
-    // Apply layout calculation
+
     calculateLayout(tree);
 
     // Create nodes and edges with calculated positions
